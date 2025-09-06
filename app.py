@@ -87,7 +87,7 @@ def register():
         "username": user.username,
         "coins": user.coins,
         "referrals_count": user.referrals.count(),
-        "referral_link": f"https://t.me/YOUR_BOT?start={user.username}"
+        "referral_link": f"https://t.me/YOUR_BOT?start={user.id}"
     })
 
 # گرفتن پروفایل
