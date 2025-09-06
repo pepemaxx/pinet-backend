@@ -2,9 +2,10 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask_migrate import Migrate   # اضافه شد
+from flask_migrate import Migrate
 import datetime
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -22,7 +23,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-migrate = Migrate(app, db)    # اضافه شد
+migrate = Migrate(app, db)
 jwt = JWTManager(app)
 
 # ================= مدل‌ها =================
@@ -32,7 +33,6 @@ class User(db.Model):
     coins = db.Column(db.Float, default=0)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-    # ===== Referral fields =====
     referred_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrals = db.relationship("User", backref=db.backref('referrer', remote_side=[id]))
 
@@ -42,18 +42,16 @@ class News(db.Model):
     content = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-# ================= ایجاد دیتابیس (در صورت نیاز) =================
 with app.app_context():
     db.create_all()
 
 # ================= API =================
 
-# ثبت‌نام یا لاگین
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
     username = data.get('username')
-    referral = data.get('referral')  # id یا username دعوت‌کننده
+    referral = data.get('referral')
 
     if not username:
         return jsonify({"error": "username required"}), 400
@@ -64,7 +62,6 @@ def register():
     if not user:
         user = User(username=username)
 
-        # بررسی کد رفرال
         if referral:
             inviter = None
             if isinstance(referral, int) or (isinstance(referral, str) and referral.isdigit()):
@@ -74,7 +71,7 @@ def register():
 
             if inviter and inviter.id != user.id:
                 user.referred_by = inviter.id
-                inviter.coins += 5   # پاداش دعوت‌کننده
+                inviter.coins += 5
                 db.session.add(inviter)
 
         db.session.add(user)
@@ -90,7 +87,6 @@ def register():
         "referral_link": f"https://t.me/piprotocolbot?start={user.id}"
     })
 
-# گرفتن پروفایل
 @app.route('/api/profile', methods=['GET'])
 @jwt_required()
 def profile():
@@ -106,7 +102,6 @@ def profile():
         "referral_link": f"https://t.me/piprotocolbot?start={user.id}"
     })
 
-# ماینینگ
 @app.route('/api/mine', methods=['POST'])
 @jwt_required()
 def mine():
@@ -118,11 +113,38 @@ def mine():
     db.session.commit()
     return jsonify({"coins": user.coins})
 
-# لیست اخبار
 @app.route('/api/news', methods=['GET'])
 def news():
     all_news = News.query.order_by(News.created_at.desc()).all()
     return jsonify([{"title": n.title, "content": n.content} for n in all_news])
+
+
+# ================= Webhook =================
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8260696348:AAHQNOdJyKuY1PwVgqWnSA14neue3V4avYA")
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+@app.route('/webhook', methods=['POST'])
+def telegram_webhook():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+
+    chat_id = data['message']['chat']['id']
+    text = data['message'].get('text', '')
+
+    # نمونه پاسخ ساده
+    if text == "/start":
+        message = "سلام 👋 به بازی کلیکی خوش آمدید!"
+    else:
+        message = f"شما نوشتید: {text}"
+
+    requests.post(f"{TELEGRAM_API}/sendMessage", json={
+        "chat_id": chat_id,
+        "text": message
+    })
+
+    return jsonify({"status": "ok"})
+
 
 # ================= Run =================
 if __name__ == "__main__":
