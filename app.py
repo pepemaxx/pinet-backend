@@ -42,9 +42,6 @@ class News(db.Model):
     content = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-with app.app_context():
-    db.create_all()
-
 # ================= API =================
 
 @app.route('/api/register', methods=['POST'])
@@ -61,6 +58,8 @@ def register():
 
     if not user:
         user = User(username=username)
+        db.session.add(user)
+        db.session.flush()  # تا user.id تولید شود
 
         if referral:
             inviter = None
@@ -74,7 +73,6 @@ def register():
                 inviter.coins += 5
                 db.session.add(inviter)
 
-        db.session.add(user)
         db.session.commit()
         created = True
 
@@ -116,11 +114,17 @@ def mine():
 @app.route('/api/news', methods=['GET'])
 def news():
     all_news = News.query.order_by(News.created_at.desc()).all()
-    return jsonify([{"title": n.title, "content": n.content} for n in all_news])
+    return jsonify([
+        {"id": n.id, "title": n.title, "content": n.content, "created_at": n.created_at.isoformat()}
+        for n in all_news
+    ])
 
 
 # ================= Webhook =================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8260696348:AAHQNOdJyKuY1PwVgqWnSA14neue3V4avYA")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not set in environment variables")
+
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 @app.route('/webhook', methods=['POST'])
@@ -129,18 +133,21 @@ def telegram_webhook():
     if not data:
         return jsonify({"error": "no data"}), 400
 
-    chat_id = data['message']['chat']['id']
-    text = data['message'].get('text', '')
+    message = data.get("message")
+    if not message:
+        return jsonify({"status": "ignored"})
 
-    # نمونه پاسخ ساده
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
+
     if text == "/start":
-        message = "سلام 👋 به بازی کلیکی خوش آمدید!"
+        reply = "سلام 👋 به بازی کلیکی خوش آمدید!"
     else:
-        message = f"شما نوشتید: {text}"
+        reply = f"شما نوشتید: {text}"
 
     requests.post(f"{TELEGRAM_API}/sendMessage", json={
         "chat_id": chat_id,
-        "text": message
+        "text": reply
     })
 
     return jsonify({"status": "ok"})
