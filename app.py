@@ -125,7 +125,11 @@ def api_referral_register():
     Behavior:
       - find inviter, find-or-create user
       - if user has no referred_by, set referred_by = inviter.id
-      - returnId')
+      - return success/error response
+    """
+    data = request.get_json() or {}
+    inviter_code = data.get('inviterCode')
+    user_code = data.get('userId')
 
     if not inviter_code or not user_code:
         return jsonify({"error": "inviterCode and userId required"}), 400
