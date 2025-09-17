@@ -116,20 +116,24 @@ def api_news():
     ])
 
 
+
+
 @app.route('/api/referral/register', methods=['POST'])
 def api_referral_register():
     """
-    Body: { inviterCode, userId }
+    Body: { inviterCode, userId, username? }
     - inviterCode: id or username of inviter
-    - userId: id or username of the new user
+    - userId: id or username of the new user (client-side id)
+    - username (optional): display username of the invitee (from frontend/profile)
     Behavior:
-      - find inviter, find-or-create user
+      - find inviter, find-or-create user (prefer using provided username if available)
       - if user has no referred_by, set referred_by = inviter.id
-      - return success/error response
+      - return status and created/updated user info
     """
     data = request.get_json() or {}
     inviter_code = data.get('inviterCode')
     user_code = data.get('userId')
+    supplied_username = data.get('username')  # optional display name from frontend
 
     if not inviter_code or not user_code:
         return jsonify({"error": "inviterCode and userId required"}), 400
@@ -138,20 +142,70 @@ def api_referral_register():
     if not inviter:
         return jsonify({"error": "inviter not found"}), 404
 
-    user = ensure_user(user_code)
+    # Try find by provided user_code first
+    user = find_user_by_identifier(user_code)
 
-    if user.referred_by:
-        # already referred
-        return jsonify({"status": "noop", "message": "user already referred", "inviter_id": inviter.id}), 200
+    # If not found, create. Prefer supplied_username (if provided) as username.
+    if not user:
+        if supplied_username:
+            desired_username = str(supplied_username).strip()
+            # ensure uniqueness
+            base = desired_username or f"user_{user_code}"
+            username = base
+            suffix = 0
+            while User.query.filter_by(username=username).first():
+                suffix += 1
+                username = f"{base}_{suffix}"
+            user = User(username=username)
+        else:
+            # fallback: create username from user_code
+            if isinstance(user_code, int) or (isinstance(user_code, str) and str(user_code).isdigit()):
+                username = f"user_{str(user_code)}"
+            else:
+                username = str(user_code)
+            base = username
+            suffix = 0
+            while User.query.filter_by(username=username).first():
+                suffix += 1
+                username = f"{base}_{suffix}"
+            user = User(username=username)
 
+        db.session.add(user)
+        db.session.flush()  # get id
+
+    else:
+        # If user exists but has a placeholder username and client sent a better username, update it
+        if supplied_username:
+            clean = str(supplied_username).strip()
+            if clean and user.username != clean:
+                # only update if no collision
+                other = User.query.filter(User.username == clean, User.id != user.id).first()
+                if not other:
+                    user.username = clean
+
+    # Prevent self-referral
     if inviter.id == user.id:
+        # commit potential username change before returning
+        db.session.add(user)
+        db.session.commit()
         return jsonify({"error": "cannot refer self"}), 400
 
-    user.referred_by = inviter.id
+    # If not already referred, set referred_by
+    if not user.referred_by:
+        user.referred_by = inviter.id
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({
+            "status": "ok",
+            "message": "referral registered",
+            "inviter_id": inviter.id,
+            "user": {"id": user.id, "username": user.username}
+        }), 200
+
+    # commit possible username update
     db.session.add(user)
     db.session.commit()
-
-    return jsonify({"status": "ok", "message": "referral registered", "inviter_id": inviter.id}), 200
+    return jsonify({"status": "noop", "message": "user already referred", "inviter_id": inviter.id, "user": {"id": user.id, "username": user.username}}), 200
 
 
 @app.route('/api/referral/stats', methods=['GET', 'POST'])
