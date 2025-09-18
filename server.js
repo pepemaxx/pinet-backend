@@ -12,6 +12,19 @@ app.use(express.json());
 
 // In-memory database
 const db = {
+// Friends model
+const friendModel = {
+  friends: {}, // دوستان هر کاربر
+  // ساختار دوست
+  friend: {
+    id: "unique_id",
+    username: "friend_name",
+    inviteDate: "ISO_date",
+    isActive: false,
+    activeDate: null,
+    referredBy: "user_id"
+  }
+};
   users: {},
   mining: {},
   transactions: {},
