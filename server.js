@@ -300,6 +300,89 @@ app.post('/referral/share', (req, res) => {
   });
 });
 
+// تابع ایجاد دوست جدید
+function createFriend(userId, friendData) {
+  if (!db.friends[userId]) {
+    db.friends[userId] = [];
+  }
+  
+  const newFriend = {
+id: friendData.id || uuidv4(),
+    username: friendData.username || `User${friendData.userId?.slice(-4)}`,
+    inviteDate: new Date().toISOString(),
+    isActive: false,
+    activeDate: null,
+    referredBy: userId
+  };
+  
+  db.friends[userId].push(newFriend);
+  return newFriend;
+}
+
+  // جلوگیری از دعوت خود
+  if (inviterCode === userId) {
+    return res.status(400).json({ error: 'Cannot refer yourself' });
+  }
+
+  const inviter = getUser(inviterCode);
+  const invitee = getUser(userId);
+  
+  // چک کنید که قبلاً دعوت نشده
+  const referralData = getReferralData(inviterCode);
+  const alreadyInvited = referralData.invitedFriends.some(f => f.id === userId);
+  
+  if (!alreadyInvited) {
+    // ایجاد دوست جدید
+    const newFriend = createFriend(inviterCode, {
+      id: userId,
+      username: username || invitee.profile?.first || `User${userId.slice(-4)}`
+    });
+    // به‌روزرسانی آمار
+    referralData.invited += 1;
+    referralData.invitedFriends.push(newFriend);
+    
+    res.json({
+      success: true,
+      message: 'Friend invited successfully',
+      friend: newFriend
+    });
+  } else {
+    res.json({
+      success: false,
+      message: 'Already invited'
+    });
+  }
+});
+
+// API برای فعال‌سازی دوست
+app.post('/referral/activate', (req, res) => {
+  const { userId, friendId } = req.body;
+  
+  const referralData = getReferralData(userId);
+  const friendIndex = referralData.invitedFriends.findIndex(f => f.id === friendId);
+  
+  if (friendIndex !== -1 && !referralData.invitedFriends[friendIndex].isActive) {
+    // فعال‌سازی دوست
+    referralData.invitedFriends[friendIndex].isActive = true;
+    referralData.invitedFriends[friendIndex].activeDate = new Date().toISOString();
+    
+    // اضافه کردن به لیست فعال‌ها
+    referralData.activeFriends.push(referralData.invitedFriends[friendIndex]);
+    referralData.active += 1;
+    
+    res.json({
+      success: true,
+      message: 'Friend activated',
+      friend: referralData.invitedFriends[friendIndex]
+    });
+  } else {
+    res.json({
+      success: false,
+      message: 'Friend not found or already active'
+    });
+  }
+});
+
 // News endpoint
 app.get('/news', (req, res) => {
   res.json(db.news);
