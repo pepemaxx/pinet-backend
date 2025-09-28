@@ -1,67 +1,87 @@
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   userId: {
     type: String,
     required: true,
     unique: true,
+    trim: true
+  },
+  firstName: {
+    type: String,
     trim: true,
-    minlength: 7,
-    maxlength: 7
+    default: ''
+  },
+  lastName: {
+    type: String,
+    trim: true,
+    default: ''
   },
   coins: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
   pi: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
   usdt: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
-  friendsInvited: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  friendsActive: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  miningRate: {
-    type: Number,
-    default: 0.002
-  },
-  joinedAt: {
+  miningStart: {
     type: Date,
-    default: Date.now
+    default: null
   },
-  referredBy: {
+  lastMiningClaim: {
+    type: Date,
+    default: null
+  },
+  lastManualMining: {
+    type: Date,
+    default: null
+  },
+  referrer: {
     type: String,
     default: null
   },
-  lastActive: {
+  referralLevel: {
+    type: Number,
+    default: 1
+  },
+  totalReferralRewards: {
+    type: Number,
+    default: 0
+  },
+  completedTasks: {
+    type: [String],
+    default: []
+  },
+  lastResetDate: {
+    type: Date,
+    default: Date.now
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
-}, {
-  timestamps: true
+}, { timestamps: true });
+
+// Virtual for getting full name
+UserSchema.virtual('fullName').get(function() {
+  if (this.firstName && this.lastName) {
+    return `${this.firstName} ${this.lastName}`;
+  } else if (this.firstName) {
+    return this.firstName;
+  } else if (this.lastName) {
+    return this.lastName;
+  } else {
+    return 'User';
+  }
 });
 
-// Update lastActive timestamp before saving
-userSchema.pre('save', function(next) {
-  this.lastActive = new Date();
-  next();
-});
-
-// Index for better performance
-userSchema.index({ userId: 1 });
-userSchema.index({ referredBy: 1 });
-
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', UserSchema);
