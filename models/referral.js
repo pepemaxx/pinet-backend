@@ -1,21 +1,27 @@
 const mongoose = require('mongoose');
 
-const referralSchema = new mongoose.Schema({
-  inviterCode: {
+const ReferralSchema = new mongoose.Schema({
+  referrerId: {
     type: String,
     required: true,
-    trim: true
+    index: true
   },
-  userId: {
+  referredId: {
     type: String,
     required: true,
-    unique: true,
-    trim: true
+    unique: true
   },
-  status: {
-    type: String,
-    enum: ['invited', 'active', 'rewarded'],
-    default: 'invited'
+  isActive: {
+    type: Boolean,
+    default: false
+  },
+  rewardClaimed: {
+    type: Boolean,
+    default: false
+  },
+  activationRewardClaimed: {
+    type: Boolean,
+    default: false
   },
   inviteDate: {
     type: Date,
@@ -24,19 +30,10 @@ const referralSchema = new mongoose.Schema({
   activationDate: {
     type: Date,
     default: null
-  },
-  rewardGiven: {
-    type: Boolean,
-    default: false
   }
-}, {
-  timestamps: true
-});
+}, { timestamps: true });
 
-// Indexes for better performance
-referralSchema.index({ inviterCode: 1 });
-referralSchema.index({ userId: 1 });
-referralSchema.index({ inviterCode: 1, status: 1 });
-referralSchema.index({ inviteDate: 1 });
+// Indexes for faster queries
+ReferralSchema.index({ referrerId: 1, referredId: 1 }, { unique: true });
 
-module.exports = mongoose.model('Referral', referralSchema);
+module.exports = mongoose.model('Referral', ReferralSchema);
